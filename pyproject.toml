@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agentic-repo-cleaner"
+version = "0.1.0"
+description = "Guideline-driven autonomous repo cleanup agent with deterministic validation gates."
+requires-python = ">=3.10"
+dependencies = [
+    "pydantic>=2.6",
+    "requests>=2.31",
+    "typer>=0.9",
+    "rich>=13.7",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[project.scripts]
+agentic-repo-cleaner = "agentic_repo_cleaner.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

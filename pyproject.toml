@@ -12,6 +12,7 @@ dependencies = [
     "requests>=2.31",
     "typer>=0.9",
     "rich>=13.7",
+    "pypdf>=4.0",
 ]
 
 [project.optional-dependencies]

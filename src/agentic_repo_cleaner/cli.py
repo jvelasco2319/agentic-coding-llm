@@ -89,7 +89,7 @@ def validate(repo: Path = typer.Option(..., exists=True, file_okay=False, help="
 @app.command("translate-cpp")
 def translate_cpp(
     repo: Path = typer.Option(..., exists=True, file_okay=False, help="Target repository path."),
-    guideline: Path = typer.Option(Path("guidelines/project_guideline.md"), help="Path to guideline markdown."),
+    guideline: Path = typer.Option(Path("guidelines/project_guideline_original.md"), help="Path to guideline markdown."),
     task: str = typer.Option(
         "Translate this Python repository to C++ while preserving behavior. Keep Python as the reference implementation and create C++ code under cpp/."
     ),
@@ -105,7 +105,7 @@ def translate_cpp(
 def plan(
     mode: str = typer.Option("cleanup",help="Workflow mode: cleanup, translate_cpp, document_only, test_generation, bug_fix."),
     repo: Path = typer.Option(..., exists=True, file_okay=False, help="Target repository path."),
-    guideline: Path = typer.Option(Path("guidelines/project_guideline.md"), help="Path to guideline markdown."),
+    guideline: Path = typer.Option(Path("guidelines/project_guideline_original.md"), help="Path to guideline markdown."),
     task: str = typer.Option("Organize, clean, document, and test this repo while preserving working behavior."),
     mapper_model: Optional[str] = typer.Option(None, help="Mapper model. Default: glm-5.1:cloud"),
     planner_model: Optional[str] = typer.Option(None, help="Planner model. Default: minimax-m2.5:cloud"),
@@ -131,7 +131,7 @@ def plan(
 def apply(
     mode: str = typer.Option("cleanup",help="Workflow mode: cleanup, translate_cpp, document_only, test_generation, bug_fix."),
     repo: Path = typer.Option(..., exists=True, file_okay=False, help="Target repository path."),
-    guideline: Path = typer.Option(Path("guidelines/project_guideline.md"), help="Path to guideline markdown."),
+    guideline: Path = typer.Option(Path("guidelines/project_guideline_original.md"), help="Path to guideline markdown."),
     task: str = typer.Option("Organize, clean, document, and test this repo while preserving working behavior."),
     mapper_model: Optional[str] = typer.Option(None, help="Mapper model. Default: glm-5.1:cloud"),
     planner_model: Optional[str] = typer.Option(None, help="Planner model. Default: minimax-m2.5:cloud"),

@@ -118,4 +118,10 @@ def extract_json_object(text: str) -> dict[str, Any]:
         if all(isinstance(item, dict) and _looks_like_file_edit(item) for item in value):
             return _wrap_file_edits_as_apply_result(value)
 
+        raise JSONExtractionError(
+            "Expected one JSON object, but the LLM returned a JSON list. "
+            "This usually means the agent returned analysis or a partial JSON fragment "
+            "instead of the required top-level object."
+        )
+
     raise JSONExtractionError(f"Expected JSON object, got {type(value).__name__}.")

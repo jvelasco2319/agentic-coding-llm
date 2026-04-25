@@ -10,7 +10,7 @@ from .file_reader import is_probably_text
 IGNORED_DIRS = {
     ".git", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache",
     "venv", ".venv", "env", ".env", "dist", "build", "node_modules",
-    "workspaces",
+    "workspaces", "output",
 }
 
 
@@ -75,11 +75,36 @@ class RepoMapper:
     def _language_for(path: Path) -> str:
         return {
             ".py": "python",
+            ".m": "matlab",
+
+            ".cpp": "cpp",
+            ".hpp": "cpp",
+            ".h": "cpp",
+            ".cc": "cpp",
+            ".cxx": "cpp",
+            ".hh": "cpp",
+            ".hxx": "cpp",
+            ".c": "c",
+
+            ".js": "javascript",
+            ".jsx": "javascript",
+            ".ts": "typescript",
+            ".tsx": "typescript",
+
+            ".java": "java",
+            ".kt": "kotlin",
+            ".cs": "csharp",
+
+            ".rs": "rust",
+            ".go": "go",
+
             ".md": "markdown",
             ".toml": "toml",
             ".json": "json",
             ".yaml": "yaml",
             ".yml": "yaml",
+            ".csv": "csv",
+            ".cmake": "cmake",
         }.get(path.suffix.lower(), "text")
 
     @staticmethod

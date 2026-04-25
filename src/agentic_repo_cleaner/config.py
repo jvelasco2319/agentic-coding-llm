@@ -20,11 +20,13 @@ class AppConfig:
     closer to planning/implementation than independent review.
     """
 
+    mode: str = "cleanup"
+
     ollama_host: str = field(default_factory=lambda: os.getenv("OLLAMA_HOST", "http://localhost:11434"))
 
     mapper_model: str = field(default_factory=lambda: os.getenv("AGENTIC_MAPPER_MODEL", "glm-5.1:cloud"))
     planner_model: str = field(default_factory=lambda: os.getenv("AGENTIC_PLANNER_MODEL", "minimax-m2.5:cloud"))
-    reviewer_model: str = field(default_factory=lambda: os.getenv("AGENTIC_REVIEWER_MODEL", "kimi-k2.5:cloud"))
+    reviewer_model: str = field(default_factory=lambda: os.getenv("AGENTIC_REVIEWER_MODEL", "kimi-k2.6:cloud"))
 
     # Supporting roles. These default to the planner model unless overridden.
     applier_model: str = field(default_factory=lambda: os.getenv("AGENTIC_APPLIER_MODEL", "minimax-m2.5:cloud"))

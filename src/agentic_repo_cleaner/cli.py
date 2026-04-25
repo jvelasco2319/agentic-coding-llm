@@ -6,6 +6,8 @@ from typing import Optional
 import typer
 from rich.console import Console
 
+from .modes import available_modes
+
 from .config import AppConfig
 from .llm.model_router import ModelRouter
 from .pipeline import Pipeline
@@ -51,6 +53,12 @@ def _make_config(
 
     return config
 
+@app.command("modes")
+def list_modes() -> None:
+    """
+    Show available workflow modes.
+    """
+    console.print_json(data=available_modes())
 
 @app.command()
 def models(
@@ -78,15 +86,30 @@ def validate(repo: Path = typer.Option(..., exists=True, file_okay=False, help="
     console.print_json(result.model_dump_json(indent=2))
     raise typer.Exit(0 if result.passed else 1)
 
+@app.command("translate-cpp")
+def translate_cpp(
+    repo: Path = typer.Option(..., exists=True, file_okay=False, help="Target repository path."),
+    guideline: Path = typer.Option(Path("guidelines/project_guideline.md"), help="Path to guideline markdown."),
+    task: str = typer.Option(
+        "Translate this Python repository to C++ while preserving behavior. Keep Python as the reference implementation and create C++ code under cpp/."
+    ),
+) -> None:
+    config = AppConfig()
+    config.mode = "translate_cpp"
+
+    manifest = Pipeline(config).apply(repo, guideline, task)
+    console.print_json(manifest.model_dump_json(indent=2))
+    raise typer.Exit(0 if manifest.final_status == "applied" else 1)
 
 @app.command()
 def plan(
+    mode: str = typer.Option("cleanup",help="Workflow mode: cleanup, translate_cpp, document_only, test_generation, bug_fix."),
     repo: Path = typer.Option(..., exists=True, file_okay=False, help="Target repository path."),
     guideline: Path = typer.Option(Path("guidelines/project_guideline.md"), help="Path to guideline markdown."),
     task: str = typer.Option("Organize, clean, document, and test this repo while preserving working behavior."),
     mapper_model: Optional[str] = typer.Option(None, help="Mapper model. Default: glm-5.1:cloud"),
     planner_model: Optional[str] = typer.Option(None, help="Planner model. Default: minimax-m2.5:cloud"),
-    reviewer_model: Optional[str] = typer.Option(None, help="Reviewer model. Default: kimi-k2.5:cloud"),
+    reviewer_model: Optional[str] = typer.Option(None, help="Reviewer model. Default: kimi-k2.6:cloud"),
     applier_model: Optional[str] = typer.Option(None, help="Applier model. Default: planner model."),
     test_designer_model: Optional[str] = typer.Option(None, help="Test designer model. Default: planner model."),
     repair_model: Optional[str] = typer.Option(None, help="Repair model. Default: planner model."),
@@ -99,12 +122,14 @@ def plan(
         test_designer_model=test_designer_model,
         repair_model=repair_model,
     )
+    config.mode = mode
     result = Pipeline(config).plan_only(repo, guideline, task)
     console.print_json(result.model_dump_json(indent=2))
 
 
 @app.command()
 def apply(
+    mode: str = typer.Option("cleanup",help="Workflow mode: cleanup, translate_cpp, document_only, test_generation, bug_fix."),
     repo: Path = typer.Option(..., exists=True, file_okay=False, help="Target repository path."),
     guideline: Path = typer.Option(Path("guidelines/project_guideline.md"), help="Path to guideline markdown."),
     task: str = typer.Option("Organize, clean, document, and test this repo while preserving working behavior."),
@@ -123,6 +148,8 @@ def apply(
         test_designer_model=test_designer_model,
         repair_model=repair_model,
     )
+    config.mode = mode
+
     manifest = Pipeline(config).apply(repo, guideline, task)
     console.print_json(manifest.model_dump_json(indent=2))
     raise typer.Exit(0 if manifest.final_status == "applied" else 1)

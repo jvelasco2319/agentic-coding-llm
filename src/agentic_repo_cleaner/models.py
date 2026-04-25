@@ -102,6 +102,9 @@ class RepairResult(BaseModel):
 
 
 class RunManifest(BaseModel):
+    mode: str = "cleanup"
+    mode_description: str = ""
+    validation_profile: str = ""
     run_id: str
     created_at: datetime
     task: str

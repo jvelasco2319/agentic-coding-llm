@@ -4,8 +4,30 @@ from pathlib import Path
 
 
 TEXT_EXTENSIONS = {
+    # Python / docs / data
     ".py", ".md", ".txt", ".toml", ".yaml", ".yml", ".json", ".ini", ".cfg",
-    ".csv", ".sql", ".sh", ".bat", ".ps1",
+    ".csv", ".sql",
+
+    # Shell / scripts
+    ".sh", ".bat", ".ps1", ".env", ".gitignore",
+
+    # C / C++
+    ".c", ".cpp", ".cc", ".cxx", ".h", ".hpp", ".hh", ".hxx", ".cmake",
+
+    # MATLAB
+    ".m",
+
+    # JavaScript / TypeScript
+    ".js", ".jsx", ".ts", ".tsx",
+
+    # Java / Kotlin / C#
+    ".java", ".kt", ".cs",
+
+    # Rust / Go
+    ".rs", ".go",
+
+    # Build files
+    ".gradle", ".make",
 }
 
 

@@ -5,6 +5,7 @@ from pathlib import Path
 from ..config import AppConfig
 from ..models import CommandResult, ValidationResult
 from .import_check import run_basic_import_check
+from .profiles import get_profile_commands
 from .syntax_check import run_compileall
 from .test_runner import run_command
 
@@ -58,16 +59,45 @@ class Validator:
                 if not unit_tests_passed:
                     failures.append("pytest failed")
 
+        profile_name = self._profile_name_for_mode()
+        profile_commands = get_profile_commands(profile_name)
+
+        already_run = {result.command for result in commands}
+
+        for cmd in profile_commands:
+            if not cmd.strip():
+                continue
+
+            # Avoid repeating commands that were already run by hardcoded checks.
+            if cmd in already_run:
+                continue
+
+            result = run_command(cmd, repo_path)
+            commands.append(result)
+            already_run.add(cmd)
+
+            if result.exit_code != 0:
+                smoke_tests_passed = False
+                failures.append(f"profile validation command failed: {cmd}")
+
         for cmd in extra_commands:
             if not cmd.strip():
                 continue
+
+            # Avoid repeating commands already run by the validation profile.
+            if cmd in already_run:
+                continue
+
             result = run_command(cmd, repo_path)
             commands.append(result)
+            already_run.add(cmd)
+
             if result.exit_code != 0:
                 smoke_tests_passed = False
                 failures.append(f"extra validation command failed: {cmd}")
 
         passed = syntax_passed and import_passed and unit_tests_passed and smoke_tests_passed
+
         return ValidationResult(
             passed=passed,
             syntax_passed=syntax_passed,
@@ -77,3 +107,11 @@ class Validator:
             commands_run=commands,
             failures=failures,
         )
+
+    def _profile_name_for_mode(self) -> str:
+        mode = getattr(self.config, "mode", "cleanup")
+
+        if mode == "translate_cpp":
+            return "python_and_cpp"
+
+        return "python"

@@ -57,6 +57,33 @@ Avoid changing validated algorithmic behavior without clear justification, delet
 making broad changes without validation, hiding uncertainty, claiming success without tests or validation,
 or imposing arbitrary file-count restrictions.
 
+You must return exactly one JSON object.
+
+Do not return a JSON array.
+Do not return a task list.
+Do not return objects with keys like id, name, type, command.
+Do not return a list of steps.
+Do not include analysis before the JSON.
+Do not include markdown.
+Do not include code fences.
+Do not propose commands as the top-level output.
+
+The top-level JSON object must contain exactly these keys:
+- title
+- rationale
+- target_files
+- intended_outcome
+- planned_changes
+- completion_criteria
+- good_enough_reason
+- validation_strategy
+- risks
+- deferred_work
+
+If the requested bug appears already fixed, do not invent a new bug.
+Instead, create a minimal plan to add or verify regression coverage,
+or explain in the plan why no source-code fix is needed.
+
 JSON schema:
 {{
   "title": "string",
@@ -176,6 +203,16 @@ The top-level JSON object must contain exactly these keys:
 - deleted_files
 - notes
 
+Every object in changed_files and added_files must contain exactly:
+- path
+- content
+- reason
+
+Use changed_files for files that already exist in Current file contents.
+Use added_files only for brand-new files that do not exist yet.
+Never place an existing file in added_files.
+Never omit reason.
+
 JSON schema:
 {{
   "summary": "string",
@@ -206,10 +243,38 @@ You are the Repair agent.
 
 Your job is to fix validation failures caused by the candidate changes.
 
-Use the original task, guideline, cleanup plan, current candidate file contents,
-validation stdout/stderr, and failed commands.
+You must return exactly one JSON object.
 
-Make the smallest coherent repair needed to pass validation while preserving the intended cleanup.
+Do not include explanations before the JSON.
+Do not include markdown.
+Do not include code fences.
+Do not return a JSON array.
+Do not return a list of strings.
+Do not return analysis.
+Do not say "Looking at the validation failures".
+Do not describe your reasoning outside the JSON.
+
+Use:
+- original task
+- guideline
+- cleanup/translation plan
+- current candidate file contents
+- validation stdout/stderr
+- failed commands
+- workflow mode
+
+Repair rules:
+- Fix only files needed to make validation pass.
+- Preserve behavior unless the task explicitly allows behavior change.
+- Prefer correcting tests when the test expectation is wrong.
+- Prefer correcting code when the implementation is wrong.
+- Do not broaden the scope during repair.
+- Return full file contents for every repaired file.
+
+The top-level JSON object must contain exactly these keys:
+- summary
+- changed_files
+- notes
 
 JSON schema:
 {{
@@ -244,8 +309,17 @@ Return the repository map JSON.
 """.strip()
 
 
-def build_planner_user_prompt(task: str, guideline: str, repo_map: dict[str, Any], file_context: dict[str, str]) -> str:
+def build_planner_user_prompt(
+    task: str,
+    guideline: str,
+    repo_map: dict[str, Any],
+    file_context: dict[str, str],
+    mode: dict[str, Any],
+) -> str:
     return f"""
+Workflow mode:
+{_dump(mode)}
+
 Task:
 {task}
 
@@ -258,12 +332,81 @@ Repository map:
 Relevant file contents:
 {_dump(file_context)}
 
-Create one cleanup plan.
-Let the guideline determine what is good enough.
-Do not impose arbitrary tiny-scope restrictions.
-Define completion criteria and validation strategy.
+Create one plan for this workflow mode.
+
+Use the workflow mode and guideline as the source of truth.
+Do not assume this is only a cleanup task.
+
+Define:
+- target files
+- intended outcome
+- planned changes
+- behavior to preserve
+- validation strategy
+- completion criteria
+- good-enough reason
+- risks
+- deferred work
+
+Return exactly one CleanupPlan JSON object.
+
+Do not return:
+- a JSON array
+- a task list
+- a command list
+- a list of objects with id/name/type/command
+- markdown
+- analysis text
+
+If the requested bug is already fixed in the provided file contents, create a minimal plan that verifies or adds regression coverage.
+Do not invent a new bug.
 """.strip()
 
+def build_plan_reviewer_user_prompt(
+    task: str,
+    guideline: str,
+    repo_map: dict[str, Any],
+    plan: dict[str, Any],
+    mode: dict[str, Any] | None = None,
+) -> str:
+    return f"""
+Workflow mode:
+{_dump(mode or {})}
+
+Task:
+{task}
+
+Project guideline:
+{guideline}
+
+Repository map:
+{_dump(repo_map)}
+
+Plan:
+{_dump(plan)}
+
+Review this plan only.
+
+At this stage, no files have been changed yet.
+At this stage, apply_result and validation_result are expected to be absent.
+Do not reject the plan merely because validation has not run yet.
+
+Approve when:
+- the plan is coherent for the workflow mode
+- the target files make sense
+- the planned changes are concrete enough for the Applier
+- the validation strategy is reasonable
+- the plan preserves behavior unless the task requires a fix
+
+Request revision when:
+- the plan is too speculative
+- the plan proposes the wrong technical fix
+- target files are missing or unrelated
+- validation strategy is weak
+- completion criteria are unclear
+
+Return exactly one JSON object matching the ReviewVerdict schema.
+""".strip()
 
 def build_reviewer_user_prompt(
     task: str,
@@ -272,8 +415,14 @@ def build_reviewer_user_prompt(
     plan: dict[str, Any],
     apply_result: dict[str, Any] | None = None,
     validation_result: dict[str, Any] | None = None,
+    mode: dict[str, Any] | None = None,
+
 ) -> str:
     return f"""
+
+Workflow mode:
+{_dump(mode or {})}
+
 Task:
 {task}
 
@@ -293,7 +442,7 @@ Validation result:
 {_dump(validation_result or {})}
 
 Review whether this is good enough for this pass.
-Use engineering judgment and the guideline.
+Use engineering judgment, the workflow mode, and the guideline.
 """.strip()
 
 
@@ -303,8 +452,12 @@ def build_test_designer_user_prompt(
     repo_map: dict[str, Any],
     plan: dict[str, Any],
     file_context: dict[str, str],
+    mode: dict[str, Any],
 ) -> str:
     return f"""
+Workflow mode:
+{_dump(mode)}
+
 Task:
 {task}
 
@@ -314,15 +467,21 @@ Project guideline:
 Repository map:
 {_dump(repo_map)}
 
-Cleanup plan:
+Cleanup/translation plan:
 {_dump(plan)}
 
 Relevant file contents:
 {_dump(file_context)}
 
-Design the unit/smoke validation plan.
+Design the unit/smoke/build validation plan for this workflow mode.
+
 The LLM determines what should be validated.
 The deterministic validator will execute the commands.
+
+Include validation commands that are appropriate for the selected mode.
+For example:
+- Python cleanup: unittest, pytest, import checks, smoke run
+- C++ translation: CMake configure/build, executable smoke test, comparison with Python reference when practical
 """.strip()
 
 
@@ -332,15 +491,19 @@ def build_applier_user_prompt(
     plan: dict[str, Any],
     test_plan: dict[str, Any],
     file_context: dict[str, str],
+    mode: dict[str, Any],
 ) -> str:
     return f"""
+Workflow mode:
+{_dump(mode)}
+
 Task:
 {task}
 
 Project guideline:
 {guideline}
 
-Cleanup plan:
+Plan:
 {_dump(plan)}
 
 Test plan:
@@ -349,9 +512,39 @@ Test plan:
 Current file contents:
 {_dump(file_context)}
 
-Apply the cleanup and tests.
+Apply the work for this workflow mode.
 Return full contents for every changed or added file.
+
+Follow the mode's output policy.
+If the mode says to preserve source files, do not delete or overwrite the source implementation.
+
+The response must be exactly one JSON object.
+
+Do not return one JSON object per file.
+Do not return a JSON array.
+Do not include introductory text.
+Do not include analysis.
+Do not include markdown.
+Do not include code fences.
+
+The top-level JSON object must contain exactly these keys:
+- summary
+- changed_files
+- added_files
+- deleted_files
+- notes
+
+Every file object in changed_files and added_files must include:
+{{
+  "path": "relative/path.py",
+  "content": "full file content",
+  "reason": "why this file was changed or added"
+}}
+
+If a file path is present in Current file contents, put it in changed_files, not added_files.
+Do not omit reason.
 """.strip()
+
 
 
 def build_repair_user_prompt(
@@ -360,15 +553,19 @@ def build_repair_user_prompt(
     plan: dict[str, Any],
     validation_result: dict[str, Any],
     file_context: dict[str, str],
+    mode: dict[str, Any],
 ) -> str:
     return f"""
+Workflow mode:
+{_dump(mode)}
+
 Task:
 {task}
 
 Project guideline:
 {guideline}
 
-Cleanup plan:
+Plan:
 {_dump(plan)}
 
 Validation result:
@@ -377,6 +574,28 @@ Validation result:
 Current candidate file contents:
 {_dump(file_context)}
 
-Repair the candidate so validation can pass.
-Return full contents for every repaired file.
+Repair the candidate so validation can pass for this workflow mode.
+
+Return exactly one JSON object with this shape:
+{{
+  "summary": "short repair summary",
+  "changed_files": [
+    {{
+      "path": "relative/path.py",
+      "content": "full repaired file content",
+      "reason": "why this file needed repair"
+    }}
+  ],
+  "notes": ["short note"]
+}}
+
+Do not include analysis.
+Do not include markdown.
+Do not include code fences.
+Do not return a JSON array.
+Do not return a list.
+Do not include text before or after the JSON.
+
+Follow the mode's output policy.
+Preserve behavior unless the task explicitly allows behavior change.
 """.strip()

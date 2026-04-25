@@ -16,9 +16,17 @@ class TestDesignerAgent:
         repo_map: RepoMap,
         plan: CleanupPlan,
         file_context: dict[str, str],
+        mode: dict,
     ) -> TestPlan:
         payload = self.llm.chat_json(
             SYSTEM_TEST_DESIGNER,
-            build_test_designer_user_prompt(task, guideline, repo_map.model_dump(), plan.model_dump(), file_context),
+            build_test_designer_user_prompt(
+                task,
+                guideline,
+                repo_map.model_dump(),
+                plan.model_dump(),
+                file_context,
+                mode,
+            ),
         )
         return TestPlan.model_validate(payload)

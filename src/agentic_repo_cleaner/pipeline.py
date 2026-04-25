@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
+from .modes import get_mode
 
 from .agents.applier_agent import ApplierAgent
 from .agents.planner_agent import PlannerAgent
@@ -37,6 +38,8 @@ class Pipeline:
 
     def __init__(self, config: AppConfig) -> None:
         self.config = config
+        self.mode = get_mode(config.mode)
+        self.mode_payload = self.mode.to_prompt_dict()
         self.router = ModelRouter(config)
 
         self.mapper = RepoMapper()
@@ -55,16 +58,35 @@ class Pipeline:
         repo_map = self.mapper.map_repo(repo_path)
         file_context = self.context_builder.build_initial_context(repo_path, repo_map)
 
-        plan = self.planner.create_plan(task, guideline, repo_map, file_context)
+        plan = self.planner.create_plan(
+            task,
+            guideline,
+            repo_map,
+            file_context,
+            self.mode_payload,
+        )
 
         for _ in range(self.config.max_plan_revisions):
-            review = self.reviewer.review_plan(task, guideline, repo_map, plan)
+            review = self.reviewer.review_plan(
+                task,
+                guideline,
+                repo_map,
+                plan,
+                self.mode_payload,
+            )
             if review.status == "approve":
                 return plan
             if review.status == "reject":
                 return plan
-            plan = self.planner.revise_plan(task, guideline, repo_map, file_context, plan, review)
-
+            plan = self.planner.revise_plan(
+                task,
+                guideline,
+                repo_map,
+                file_context,
+                plan,
+                review,
+                self.mode_payload,
+            )
         return plan
 
     def apply(self, repo_path: Path, guideline_path: Path, task: str) -> RunManifest:
@@ -76,22 +98,44 @@ class Pipeline:
         repo_map = self.mapper.map_repo(repo_path)
         file_context = self.context_builder.build_initial_context(repo_path, repo_map)
 
-        plan = self.planner.create_plan(task, guideline, repo_map, file_context)
-
+        plan = self.planner.create_plan(
+            task,
+            guideline,
+            repo_map,
+            file_context,
+            self.mode_payload,
+        )
         review = None
         for _ in range(self.config.max_plan_revisions):
-            review = self.reviewer.review_plan(task, guideline, repo_map, plan)
+            review = self.reviewer.review_plan(
+                task,
+                guideline,
+                repo_map,
+                plan,
+                self.mode_payload,
+            )
             if review.status == "approve":
                 break
             if review.status == "reject":
                 break
-            plan = self.planner.revise_plan(task, guideline, repo_map, file_context, plan, review)
+            plan = self.planner.revise_plan(
+                task,
+                guideline,
+                repo_map,
+                file_context,
+                plan,
+                review,
+                self.mode_payload,
+            )
 
         if review is None or review.status != "approve":
             manifest = RunManifest(
                 run_id=run_id,
                 created_at=datetime.now(),
                 task=task,
+                mode=self.mode.name,
+                mode_description=self.mode.description,
+                validation_profile=self.mode.validation_profile,
                 repo_path=str(repo_path),
                 guideline_path=str(guideline_path),
                 plan=plan,
@@ -103,8 +147,22 @@ class Pipeline:
             return manifest
 
         target_context = self.context_builder.build_context_for_files(repo_path, plan.target_files)
-        test_plan = self.test_designer.create_test_plan(task, guideline, repo_map, plan, target_context)
-        apply_result = self.applier.apply(task, guideline, plan, test_plan, target_context)
+        test_plan = self.test_designer.create_test_plan(
+            task,
+            guideline,
+            repo_map,
+            plan,
+            target_context,
+            self.mode_payload,
+        )
+        apply_result = self.applier.apply(
+            task,
+            guideline,
+            plan,
+            test_plan,
+            target_context,
+            self.mode_payload,
+        )
 
         backup = BackupManager(repo_path, workspace.backups_dir)
         backup.backup_paths([*plan.target_files, *[f.path for f in apply_result.added_files]])
@@ -117,12 +175,27 @@ class Pipeline:
         while not validation.passed and repair_attempt < self.config.max_repair_attempts:
             candidate_files = list({*[f.path for f in apply_result.changed_files], *[f.path for f in apply_result.added_files]})
             repair_context = self.context_builder.build_context_for_files(repo_path, candidate_files)
-            repair_result = self.repair_agent.repair(task, guideline, plan, validation, repair_context)
+            repair_result = self.repair_agent.repair(
+                task,
+                guideline,
+                plan,
+                validation,
+                repair_context,
+                self.mode_payload,
+            )
             apply_file_edits(repo_path, repair_result.changed_files, [], [])
             validation = self.validator.validate(repo_path, extra_commands=test_plan.validation_commands)
             repair_attempt += 1
 
-        final_review = self.reviewer.review_completed_work(task, guideline, repo_map, plan, apply_result, validation)
+        final_review = self.reviewer.review_completed_work(
+            task,
+            guideline,
+            repo_map,
+            plan,
+            apply_result,
+            validation,
+            self.mode_payload,
+        )
 
         if validation.passed and final_review.status == "approve":
             final_status = "applied"
@@ -136,6 +209,9 @@ class Pipeline:
             run_id=run_id,
             created_at=datetime.now(),
             task=task,
+            mode=self.mode.name,
+            mode_description=self.mode.description,
+            validation_profile=self.mode.validation_profile,
             repo_path=str(repo_path),
             guideline_path=str(guideline_path),
             plan=plan,
